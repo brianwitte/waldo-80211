@@ -1,0 +1,219 @@
+* Design doc for =waldo=
+  :PROPERTIES:
+  :CUSTOM_ID: design-document-for-linux-wireless-tool-waldo
+  :END:
+** Introduction
+   :PROPERTIES:
+   :CUSTOM_ID: introduction
+   :END:
+=waldo= is a tool for testing, debugging, and tracing linux wireless drivers and
+interactions between user space, kernel space, and drivers. it leverages native
+802.11 interfaces, libbpf, kprobes, tracepoints, and various apis. the tool can
+function in different modes, including simple connection testing, internet speed
+tests, and advanced tracing and analysis of the wireless subsystem.
+
+** Core data structures
+   :PROPERTIES:
+   :CUSTOM_ID: core-data-structures
+   :END:
+*** 1. Configuration hash map
+    :PROPERTIES:
+    :CUSTOM_ID: configuration-hash-map
+    :END:
+- *purpose*: to store all tool configurations and modes.
+- *structure*:
+  - key: configuration parameter name (string).
+  - value: configuration parameter value (varied types).
+- *usage*: this hash map will hold configurations like running modes,
+  output format preferences, and parameters for different stages.
+
+*** 2. Test pipeline data structure
+    :PROPERTIES:
+    :CUSTOM_ID: test-pipeline-data-structure
+    :END:
+- *purpose*: to manage and execute various testing and tracing stages.
+- *structure*:
+  - an array or linked list of stage objects.
+  - each stage object includes:
+    - stage identifier/name.
+    - function pointer to the stage execution function.
+    - stage-specific configuration parameters.
+- *usage*: executes a series of predefined or dynamically configured
+  stages, each performing specific tracing/debugging tasks.
+
+*** 3. Results data structure
+    :PROPERTIES:
+    :CUSTOM_ID: results-data-structure
+    :END:
+- *purpose*: to store and normalize the results from various stages.
+- *structure*:
+  - a unified format to store results from different stages.
+  - fields for common metadata like timestamp, stage identifier, and
+    result type.
+  - a flexible schema to accommodate different types of data (e.g.,
+    numerical, textual).
+- *usage*: holds results in a normalized format, ready for output in
+  various formats like json, csv, or writing to a sqlite database.
+
+** Main program structure (main.c)
+   :PROPERTIES:
+   :CUSTOM_ID: main-program-structure-main.c
+   :END:
+*** Top-level flow
+    :PROPERTIES:
+    :CUSTOM_ID: top-level-flow
+    :END:
+1. *initialization*:
+   - parse command-line arguments.
+   - initialize the configuration hash map with default settings or from
+     a config file.
+   - set up logging and output mechanisms.
+2. *mode determination*:
+   - determine the running mode (test pipeline, standalone command,
+     etc.) based on input arguments.
+3. *test pipeline execution* (if in test mode):
+   - initialize the test pipeline data structure.
+   - populate the pipeline with stages based on default or configured
+     parameters.
+   - execute each stage in sequence, gathering results in the results
+     data structure.
+4. *standalone command execution* (if in cli mode):
+   - identify the requested command.
+   - execute the command as a standalone function, leveraging the same
+     underlying logic as the pipeline stages.
+   - output results to stdout or specified format.
+5. *result processing and output*:
+   - normalize and format the results from the executed stages.
+   - output the results in the specified format (json, csv, sqlite,
+     etc.).
+6. *cleanup*:
+   - free allocated resources.
+   - close open handles and files.
+   - exit the program.
+
+*** Command line interface
+    :PROPERTIES:
+    :CUSTOM_ID: command-line-interface-cli-integration
+    :END:
+- each stage in the test pipeline should have a corresponding cli
+  command.
+- the cli parser will map commands to stage functions, allowing for
+  consistent behavior between pipeline execution and standalone command
+  usage.
+- example: the =--req-scan-trace= argument will trigger the
+  =wifi_request_scan_trace= stage function.
+
+*** Example main function structure
+    :PROPERTIES:
+    :CUSTOM_ID: example-main-function-structure
+    :END:
+#+begin_src C
+int main(int argc, char **argv) {
+    // initialization
+    parse_arguments(argc, argv);
+    load_configuration();
+    setup_logging();
+
+    // mode determination
+    switch (determine_mode(argc, argv)) {
+        case TEST_PIPELINE_MODE:
+            run_test_pipeline();
+            break;
+        case CLI_MODE:
+            run_standalone_command(argc, argv);
+            break;
+        default:
+            print_usage();
+    }
+
+    // cleanup and exit
+    cleanup_resources();
+    return 0;
+}
+#+end_src
+
+*** Stages
+    hardware registration:
+        command: ieee80211_register_hw() / ieee80211_unregister_hw()
+        purpose: to register and unregister the wireless hardware with the
+        802.11 subsystem.
+
+    scanning efficiency:
+        command: ieee80211_request_scan() -> ieee80211_scan_completed
+        purpose: to initiate a scan and then trace the duration until
+        completion. this stage logs the results and average duration of a
+        predefined number of scans.
+
+    channel switching:
+        command: ieee80211_change_channel()
+        purpose: to test the device's ability to switch between different
+        channels, measuring the time taken and success rate of these switches.
+
+    data transmission testing:
+        command: ieee80211_tx()
+        purpose: to evaluate the data transmission capabilities, focusing on
+        rates and error rates under various network conditions.
+
+    security protocol assessment:
+        command: cfg80211_connect()
+        purpose: to test the implementation and robustness of security protocols
+        like wpa/wpa2 during the connection process.
+
+    interoperability testing:
+        command: cfg80211_roam()
+        purpose: to assess device compatibility with various routers and network
+        setups, ensuring seamless connectivity and roaming capabilities.
+
+    power management evaluation:
+        command: ieee80211_ps_enable(), ieee80211_ps_disable()
+        purpose: to analyze power consumption and management efficiency in
+        different states like sleep, awake, and active transmission.
+
+    stress testing under high load:
+        command: mac80211_hwsim
+        purpose: to simulate high-traffic and multi-connection scenarios,
+        evaluating the device's performance and stability under stress.
+
+    fragmentation threshold testing:
+        command: dynamic configuration changes for fragmentation threshold.
+        purpose: to evaluate the device's handling of packet fragmentation. this
+        involves testing the performance and reliability when the fragmentation
+        threshold is varied, affecting how packets are broken down during
+        transmission.
+
+    dynamic frequency selection (dfs) testing:
+        command: ieee80211_radar_detected()
+        purpose: to test the device's compliance with dynamic frequency
+        selection regulations. this is crucial for devices operating in the 5
+        ghz band, where it's essential to avoid interfering with radar signals.
+
+    multiple bssid support:
+        command: configuration for supporting multiple bssids.
+        purpose: to assess the device's ability to handle multiple basic service
+        set identifiers (bssids), a feature important for network virtualization
+        and creating multiple virtual networks on the same hardware.
+
+    wireless multimedia extensions (wme)/wi-fi multimedia (wmm) support:
+        command: configuration and control of wme/wmm settings.
+        purpose: to test the device's support for qos at the mac layer, ensuring
+        prioritization for multimedia traffic like video and voice, which is
+        critical for modern wireless applications.
+
+    antenna diversity and mimo performance:
+        command: configuration and testing of multiple input multiple output
+        (mimo) and antenna diversity features.
+        purpose: to evaluate the device's performance in leveraging multiple
+        antennas for improved signal quality and throughput. this includes
+        testing beamforming, spatial multiplexing, and antenna selection
+        capabilities.
+
+*** Notes
+    :PROPERTIES:
+    :CUSTOM_ID: notes
+    :END:
+- *extensibility*: the design allows for easy addition of new stages and
+  cli commands.
+- *modularity*: each stage is self-contained, facilitating maintenance
+  and potential parallel execution.
+- *scalability*: the results data structure is designed to handle
+  varying amounts of data from different stages.

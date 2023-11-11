@@ -1,0 +1,92 @@
+* 80211 interfaces
+** nl80211 commands
+*** real-time signal quality monitoring:
+   - **feature**: measure and display the signal strength and noise level of the
+     wireless connection in real-time.
+   - **nl80211 Commands**: `NL80211_CMD_GET_SURVEY`, `NL80211_CMD_GET_STATION`
+
+*** packet loss analysis:
+   - **feature**: analyze and report on packet loss statistics, differentiating
+     between transmission and reception.
+   - **nl80211 Commands**: `NL80211_CMD_GET_STATION` (for TX/RX packet counts)
+
+*** driver performance metrics:
+   - **feature**: collect and present various driver performance metrics such as
+     retries, failed packets, and throughput.
+   - **nl80211 Commands**: `NL80211_CMD_GET_STATION` (provides access to
+     information like `tx_retries`, `tx_failed`, etc.)
+
+*** adaptive testing based on signal quality:
+   - **feature**: adjust testing parameters based on the signal quality to
+     better understand how performance changes with signal strength.
+   - **nl80211 Commands**: Use a combination of `NL80211_CMD_TRIGGER_SCAN` and
+     `NL80211_CMD_GET_SCAN` to adjust testing in response to the current signal
+     environment.
+
+*** spectral analysis:
+   - **feature**: perform spectral analysis to identify non-wi-fi interference
+     sources.
+   - **nl80211 Commands**: `NL80211_CMD_GET_WIPHY`, looking for spectral scan
+     capabilities.
+
+*** channel utilization:
+   - **feature**: monitor how much time is spent transmitting, receiving, and on
+     interference to understand channel utilization.
+   - **nl80211 Commands**: `NL80211_CMD_SET_CHANNEL`, `NL80211_CMD_GET_SURVEY`
+
+*** latency metrics:
+   - **feature**: measure and display the round-trip time (rtt) and other
+     latency-related statistics for the wireless link.
+   - **nl80211 Commands**: This may require custom commands or piggybacking on
+     other commands that measure RTT, such as `NL80211_CMD_GET_STATION` for
+     round-trip information.
+
+*** connection stability diagnostics:
+   - **feature**: diagnose connection stability issues by tracking
+     disconnections, beacon loss, and other anomalies.
+   - **nl80211 Commands**: `NL80211_CMD_GET_STATION`,
+     `NL80211_CMD_SET_PROBE_RESP`, `NL80211_CMD_REGISTER_BEACONS`
+
+*** roaming behavior and decision analysis:
+   - **feature**: analyze the decision-making process of roaming, including when
+     and why the driver decides to roam.
+   - **nl80211 Commands**: `NL80211_CMD_GET_ROAM_SUPPORT`,
+     `NL80211_CMD_SET_ROAM_SUPPORT`
+
+** cfg80211 tracepoints
+
+    *cfg80211_scan_done*: provides information when a scan operation is
+    completed. useful for understanding scan behaviors and troubleshooting scan
+    related issues.
+
+    *cfg80211_sched_scan_results*: offers details on the results of a scheduled
+    scan, which is crucial for understanding the environment the wireless device
+    is operating in.
+
+    *cfg80211_reg_can_beacon*: traces regulatory beaconing information. this can
+    be critical for understanding regulatory compliance and constraints.
+
+    *cfg80211_ready_on_channel*: indicates when a device is ready on a specific
+    channel, which is important for channel-based operations and
+    troubleshooting.
+
+    *cfg80211_connect_result*: this tracepoint can provide information about the
+    result of a connection attempt, which is vital for debugging connection
+    issues.
+
+    *cfg80211_rx_mgmt*: traces the reception of management frames. this is useful
+    for understanding management operations at a lower level.
+
+    *cfg80211_radar_event*: radar events are crucial for dfs (dynamic frequency
+    selection). tracing these can help understand channel switches due to radar
+    detections.
+
+    *cfg80211_disconnected*: provides details when a disconnection event occurs,
+    helping to debug disconnection or connectivity stability issues.
+
+    *cfg80211_new_sta*: traces when a new station joins. this is helpful for
+    understanding association and roaming behavior in managed networks.
+
+    *cfg80211_cqm_rssi_notify*: traces rssi (received signal strength indicator)
+    notifications, which are crucial for performance and quality-of-service
+    analysis.
